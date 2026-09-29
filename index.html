@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111111">
+<title>RSL Fee Reminder</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f4f4;color:#111}
+header{background:#111;color:#fff;padding:18px;text-align:center}header h1{margin:0;font-size:24px}header small{opacity:.8}
+nav{display:flex;gap:6px;padding:8px;background:#fff;position:sticky;top:0;z-index:3}
+nav button{flex:1;border:0;padding:11px;border-radius:8px;background:#eee;font-weight:700}
+nav button.active{background:#111;color:#fff}
+main{max-width:900px;margin:auto;padding:12px}.page{display:none}.page.active{display:block}
+.card{background:#fff;border-radius:12px;padding:14px;margin:10px 0;box-shadow:0 1px 5px #ddd}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+label{font-weight:700;font-size:13px;display:block;margin-bottom:5px}
+input,textarea,select{width:100%;padding:11px;border:1px solid #ccc;border-radius:8px;font-size:15px}
+textarea{min-height:100px;resize:vertical}
+button.primary{background:#111;color:#fff;border:0;padding:11px 15px;border-radius:8px;font-weight:700}
+button.danger{background:#b00020;color:#fff;border:0;padding:8px;border-radius:7px}
+button.green{background:#147a38;color:#fff;border:0;padding:9px;border-radius:7px}
+button.gray{background:#eee;border:0;padding:9px;border-radius:7px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#fff;border-radius:10px;padding:13px;text-align:center}.stat b{display:block;font-size:24px}
+.student{border:1px solid #ddd;border-radius:10px;padding:12px;margin:9px 0}.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.muted{color:#666;font-size:13px}
+.pending{border-left:5px solid #b00020}.paid{border-left:5px solid #147a38}
+.notice{background:#fff8d8;padding:11px;border-radius:9px;font-size:13px}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="logo.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RSL Fee Reminder">
+<link rel="apple-touch-icon" href="logo.png">
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}</script></head>
+<body>
+<header><h1>RSL Fee Reminder</h1><small>Private Fee Management • Offline First</small></header>
+<nav>
+<button class="active" onclick="showPage('dashboard',this)">Dashboard</button>
+<button onclick="showPage('students',this)">Students</button>
+<button onclick="showPage('add',this)">+ Add</button>
+<button onclick="showPage('settings',this)">Settings</button>
+</nav>
+<main>
+<section id="dashboard" class="page active">
+<div class="stats">
+<div class="stat"><b id="total">0</b>Total</div>
+<div class="stat"><b id="paid">0</b>Paid</div>
+<div class="stat"><b id="pending">0</b>Pending</div>
+</div>
+<div class="card"><h3>आज के Reminders</h3><div id="today"></div></div>
+<div class="card"><h3>आने वाले Reminders</h3><div id="upcoming"></div></div>
+<div class="notice">यह ऐप आपके फोन में data local रूप से रखता है। WhatsApp भेजने के लिए नीचे दिए गए “WhatsApp Reminder” बटन को दबाना होगा।</div>
+</section>
+
+<section id="students" class="page">
+<div class="card"><h3>Student List</h3><input id="search" placeholder="नाम / guardian / नंबर खोजें" oninput="renderStudents()"><div id="list"></div></div>
+</section>
+
+<section id="add" class="page">
+<div class="card">
+<h3>Student जोड़ें / Edit करें</h3>
+<input type="hidden" id="editId">
+<div class="grid">
+<div><label>Student Name</label><input id="name" placeholder="जैसे: Aman Kumar"></div>
+<div><label>Guardian Name</label><input id="guardian" placeholder="जैसे: Raj Kumar"></div>
+<div><label>Parent WhatsApp Number</label><input id="phone" placeholder="91XXXXXXXXXX"></div>
+<div><label>Monthly Fee (₹)</label><input id="fee" type="number" placeholder="800"></div>
+<div><label>Due Date</label><input id="due" type="date"></div>
+<div><label>Status</label><select id="status"><option value="PENDING">PENDING</option><option value="PAID">PAID</option></select></div>
+</div>
+<br><label>Reminder Schedule</label>
+<div class="row">
+<label><input type="checkbox" id="r10" checked> 10 दिन पहले</label>
+<label><input type="checkbox" id="r3" checked> 3 दिन पहले</label>
+<label><input type="checkbox" id="r1" checked> 1 दिन पहले</label>
+<label><input type="checkbox" id="rdue" checked> Due Date</label>
+</div><br>
+<button class="primary" onclick="saveStudent()">Save Student</button>
+<button class="gray" onclick="clearForm()">Clear</button>
+</div>
+</section>
+
+<section id="settings" class="page">
+<div class="card">
+<h3>Reminder Settings</h3>
+<label>आपका Payment/Contact Number</label>
+<input id="myphone" placeholder="यहाँ अपना नंबर डालें">
+<label style="margin-top:10px">Reminder Message</label>
+<textarea id="template">नमस्ते {guardian} जी 🙏
+
+आपके बच्चे {student} की {month} महीने की coaching fee ₹{fee} जमा करना बाकी है।
+
+कृपया समय पर fee जमा कर दें।
+
+Payment/Contact Number: {myphone}
+
+धन्यवाद।
+RSL Fee Reminder</textarea>
+<br><button class="primary" onclick="saveSettings()">Save Settings</button>
+</div>
+<div class="card">
+<h3>Data</h3>
+<button class="gray" onclick="exportData()">Backup Download</button>
+<button class="gray" onclick="importData()">Restore Backup</button>
+<input type="file" id="backupFile" accept=".json" style="display:none" onchange="restoreFile(event)">
+</div>
+<div class="notice">नोट: WhatsApp की security/policy के कारण कोई सामान्य free webpage आपके personal WhatsApp से बिना user action के unlimited background messages नहीं भेज सकता। यह version message तैयार करके official WhatsApp chat खोलता है।</div>
+</section>
+</main>
+
+<script>
+const KEY="rsl_fee_students_v1", SET="rsl_fee_settings_v1";
+let students=JSON.parse(localStorage.getItem(KEY)||"[]");
+let settings=JSON.parse(localStorage.getItem(SET)||'{"myphone":"","template":""}');
+if(settings.template==="") settings.template=document.getElementById("template").value;
+
+function save(){localStorage.setItem(KEY,JSON.stringify(students))}
+function showPage(id,btn){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));if(btn)btn.classList.add("active");if(id==="dashboard")renderDash();if(id==="students")renderStudents()}
+function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function daysBefore(d,n){let x=new Date(d+"T00:00:00");x.setDate(x.getDate()-n);return x.toISOString().slice(0,10)}
+function todayStr(){let d=new Date();return d.toISOString().slice(0,10)}
+function monthName(d){return new Date(d+"T00:00:00").toLocaleDateString("hi-IN",{month:"long"})}
+function reminderDates(s){let a=[];if(s.r10)a.push(["10 दिन पहले",daysBefore(s.due,10)]);if(s.r3)a.push(["3 दिन पहले",daysBefore(s.due,3)]);if(s.r1)a.push(["1 दिन पहले",daysBefore(s.due,1)]);if(s.rdue)a.push(["Due Date",s.due]);return a}
+function message(s){let t=settings.template||document.getElementById("template").value;return t.replaceAll("{student}",s.name).replaceAll("{guardian}",s.guardian).replaceAll("{fee}",s.fee).replaceAll("{month}",monthName(s.due)).replaceAll("{myphone}",settings.myphone||"")}
+function whatsapp(s){let p=(s.phone||"").replace(/\D/g,"");if(!p)return alert("Parent WhatsApp number नहीं है।");let url="https://wa.me/"+p+"?text="+encodeURIComponent(message(s));window.open(url,"_blank")}
+function markPaid(id){let s=students.find(x=>x.id===id);if(s){s.status="PAID";save();renderDash();renderStudents()}}
+function editStudent(id){let s=students.find(x=>x.id===id);if(!s)return;document.getElementById("editId").value=s.id;["name","guardian","phone","fee","due","status"].forEach(k=>document.getElementById(k).value=s[k]);["r10","r3","r1","rdue"].forEach(k=>document.getElementById(k).checked=!!s[k]);showPage("add",document.querySelectorAll("nav button")[2])}
+function delStudent(id){if(confirm("इस student को delete करें?")){students=students.filter(x=>x.id!==id);save();renderStudents();renderDash()}}
+function saveStudent(){let s={id:document.getElementById("editId").value||Date.now().toString(),name:document.getElementById("name").value.trim(),guardian:document.getElementById("guardian").value.trim(),phone:document.getElementById("phone").value.trim(),fee:document.getElementById("fee").value,due:document.getElementById("due").value,status:document.getElementById("status").value,r10:document.getElementById("r10").checked,r3:document.getElementById("r3").checked,r1:document.getElementById("r1").checked,rdue:document.getElementById("rdue").checked};if(!s.name||!s.due)return alert("Student Name और Due Date भरें।");let i=students.findIndex(x=>x.id===s.id);if(i>=0)students[i]=s;else students.push(s);save();clearForm();showPage("dashboard",document.querySelector("nav button"));renderDash()}
+function clearForm(){document.getElementById("editId").value="";["name","guardian","phone","fee","due"].forEach(k=>document.getElementById(k).value="");document.getElementById("status").value="PENDING";["r10","r3","r1","rdue"].forEach(k=>document.getElementById(k).checked=true)}
+function renderStudents(){let q=(document.getElementById("search")?.value||"").toLowerCase();let a=students.filter(s=>(s.name+" "+s.guardian+" "+s.phone).toLowerCase().includes(q));document.getElementById("list").innerHTML=a.length?a.map(s=>`<div class="student ${s.status==="PAID"?"paid":"pending"}"><b>${esc(s.name)}</b> <span class="muted">(${esc(s.guardian)})</span><br><span class="muted">Fee ₹${esc(s.fee)} • Due ${esc(s.due)} • ${esc(s.phone)}</span><div class="row" style="margin-top:8px">${s.status==="PENDING"?`<button class="green" onclick="whatsapp(students.find(x=>x.id==='${s.id}'))">WhatsApp Reminder</button><button class="gray" onclick="markPaid('${s.id}')">Mark PAID</button>`:"<span>🟢 PAID</span>"}<button class="gray" onclick="editStudent('${s.id}')">Edit</button><button class="danger" onclick="delStudent('${s.id}')">Delete</button></div></div>`).join(""):"<p class='muted'>कोई student नहीं मिला।</p>"}
+function reminderItems(){let t=todayStr(), out=[];students.filter(s=>s.status!=="PAID").forEach(s=>reminderDates(s).forEach(r=>{if(r[1]===t)out.push({s,label:r[0]})}));return out}
+function renderDash(){document.getElementById("total").textContent=students.length;document.getElementById("paid").textContent=students.filter(s=>s.status==="PAID").length;document.getElementById("pending").textContent=students.filter(s=>s.status!=="PAID").length;let x=reminderItems();document.getElementById("today").innerHTML=x.length?x.map(o=>`<div class="student pending"><b>${esc(o.s.name)}</b> — ${o.label}<br>₹${esc(o.s.fee)} • ${esc(o.s.guardian)}<br><button class="green" onclick="whatsapp(students.find(s=>s.id==='${o.s.id}'))">WhatsApp Reminder</button> <button class="gray" onclick="markPaid('${o.s.id}')">Mark PAID</button></div>`).join(""):"<p class='muted'>आज कोई reminder नहीं।</p>";let upcoming=[];let now=new Date();for(let i=1;i<=10;i++){let d=new Date();d.setDate(now.getDate()+i);let ds=d.toISOString().slice(0,10);students.filter(s=>s.status!=="PAID").forEach(s=>reminderDates(s).forEach(r=>{if(r[1]===ds)upcoming.push({s,label:r[0],date:ds})}))}document.getElementById("upcoming").innerHTML=upcoming.length?upcoming.slice(0,20).map(o=>`<div class="student"><b>${esc(o.s.name)}</b> — ${o.label} (${o.date})</div>`).join(""):"<p class='muted'>अगले 10 दिनों में कोई scheduled reminder नहीं।</p>"}
+function saveSettings(){settings.myphone=document.getElementById("myphone").value.trim();settings.template=document.getElementById("template").value;localStorage.setItem(SET,JSON.stringify(settings));alert("Settings saved.");renderDash()}
+function exportData(){let blob=new Blob([JSON.stringify({students,settings},null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="RSL_Fee_Reminder_Backup.json";a.click()}
+function importData(){document.getElementById("backupFile").click()}
+function restoreFile(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);students=d.students||[];settings=d.settings||settings;save();localStorage.setItem(SET,JSON.stringify(settings));location.reload()}catch{alert("Backup file गलत है।")}};r.readAsText(f)}
+document.getElementById("myphone").value=settings.myphone||"";document.getElementById("template").value=settings.template||document.getElementById("template").value;
+renderDash();
+</script>
+
+<script>
+let deferredPrompt;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault(); deferredPrompt = e;
+  const b=document.createElement("button");
+  b.textContent="📲 Install RSL Fee Reminder";
+  b.style="position:fixed;right:12px;bottom:12px;z-index:9999;background:#111;color:#fff;border:0;border-radius:12px;padding:13px 16px;font-weight:700;box-shadow:0 3px 12px #777";
+  b.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;b.remove();}};
+  document.body.appendChild(b);
+});
+</script>
+</body></html>
